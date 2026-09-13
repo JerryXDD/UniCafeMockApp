@@ -1,62 +1,71 @@
 import { useState, useEffect } from 'react';
-import { MenuItem, Order, AppState } from '../types';
-import { loadState, updateOrderStatus, toggleMenuItemAvailability, updateMenu, onStateChange } from '../store';
-import { Clock, CheckCircle, ChefHat, Package, Plus, Trash2, RefreshCw, ToggleLeft, ToggleRight, TrendingUp } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid';
+import { MenuItem, Order } from '../types';
+import { subscribeToMenu, subscribeToOrders, updateOrderStatus, toggleMenuItemAvailability, addMenuItem, deleteMenuItem, seedData } from '../store';
+import { Clock, CheckCircle, ChefHat, Package, Plus, Trash2, ToggleLeft, ToggleRight, TrendingUp } from 'lucide-react';
 
 type StaffPage = 'dashboard' | 'orders' | 'menu';
 
 export default function StaffView() {
   const [page, setPage] = useState<StaffPage>('dashboard');
-  const [state, setState] = useState<AppState>(loadState());
+  const [menu, setMenu] = useState<MenuItem[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [newItem, setNewItem] = useState({ name: '', description: '', price: '', category: 'snacks' as MenuItem['category'], prepTime: '5' });
   const [showAddForm, setShowAddForm] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onStateChange((newState) => {
-      setState(newState);
+    seedData().then(() => {
+      const unsubMenu = subscribeToMenu(setMenu);
+      const unsubOrders = subscribeToOrders(setOrders);
+      setLoading(false);
+      return () => {
+        unsubMenu();
+        unsubOrders();
+      };
     });
-    return unsub;
   }, []);
 
-  const pendingOrders = state.orders.filter(o => o.status === 'pending');
-  const preparingOrders = state.orders.filter(o => o.status === 'preparing');
-  const readyOrders = state.orders.filter(o => o.status === 'ready');
-  const todayRevenue = state.orders.reduce((sum, o) => sum + o.total, 0);
+  const pendingOrders = orders.filter(o => o.status === 'pending');
+  const preparingOrders = orders.filter(o => o.status === 'preparing');
+  const readyOrders = orders.filter(o => o.status === 'ready');
+  const todayRevenue = orders.reduce((sum, o) => sum + o.total, 0);
 
-  const handleStatusChange = (orderId: string, newStatus: Order['status']) => {
-    updateOrderStatus(orderId, newStatus);
-    setState(loadState());
+  const handleStatusChange = async (orderId: string, newStatus: Order['status']) => {
+    await updateOrderStatus(orderId, newStatus);
   };
 
-  const handleToggleAvailability = (itemId: string) => {
-    toggleMenuItemAvailability(itemId);
-    setState(loadState());
+  const handleToggleAvailability = async (itemId: string) => {
+    await toggleMenuItemAvailability(itemId);
   };
 
-  const handleAddItem = () => {
+  const handleAddItem = async () => {
     if (!newItem.name || !newItem.price) return;
-    const item: MenuItem = {
-      id: uuidv4(),
+    await addMenuItem({
       name: newItem.name,
       description: newItem.description,
       price: parseInt(newItem.price),
       category: newItem.category,
       available: true,
       prepTime: parseInt(newItem.prepTime) || 5,
-    };
-    const updatedMenu = [...state.menu, item];
-    updateMenu(updatedMenu);
-    setState(loadState());
+    });
     setNewItem({ name: '', description: '', price: '', category: 'snacks', prepTime: '5' });
     setShowAddForm(false);
   };
 
-  const handleRemoveItem = (itemId: string) => {
-    const updatedMenu = state.menu.filter(m => m.id !== itemId);
-    updateMenu(updatedMenu);
-    setState(loadState());
+  const handleRemoveItem = async (itemId: string) => {
+    await deleteMenuItem(itemId);
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <div className="animate-spin w-10 h-10 border-4 border-purple-600 border-t-transparent rounded-full mx-auto mb-3"></div>
+          <p className="text-gray-500">Loading Dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto pb-24">
@@ -67,9 +76,10 @@ export default function StaffView() {
             <h1 className="text-xl font-bold">👨‍🍳 Staff Dashboard</h1>
             <p className="text-purple-200 text-sm">Campus Cafeteria Management</p>
           </div>
-          <button onClick={() => setState(loadState())} className="p-2 bg-white/20 rounded-xl hover:bg-white/30">
-            <RefreshCw className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1 text-xs text-green-300 bg-white/20 px-2 py-1 rounded-full">
+            <span className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></span>
+            Live
+          </div>
         </div>
       </div>
 
@@ -110,14 +120,14 @@ export default function StaffView() {
 
           {/* Quick Actions */}
           <h3 className="font-semibold text-gray-700 mb-3">Active Orders</h3>
-          {state.orders.filter(o => o.status !== 'picked_up').length === 0 ? (
+          {orders.filter(o => o.status !== 'picked_up').length === 0 ? (
             <div className="text-center py-8 bg-white rounded-2xl shadow-sm">
               <Package className="w-12 h-12 text-gray-300 mx-auto mb-2" />
               <p className="text-gray-500">No active orders</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {state.orders.filter(o => o.status !== 'picked_up').map(order => (
+              {orders.filter(o => o.status !== 'picked_up').map(order => (
                 <div key={order.id} className="bg-white rounded-2xl p-4 shadow-sm">
                   <div className="flex justify-between items-start mb-2">
                     <div>
@@ -173,14 +183,14 @@ export default function StaffView() {
       {page === 'orders' && (
         <div>
           <h2 className="text-xl font-bold text-gray-800 mb-4">All Orders</h2>
-          {state.orders.length === 0 ? (
+          {orders.length === 0 ? (
             <div className="text-center py-12">
               <Package className="w-16 h-16 text-gray-300 mx-auto mb-3" />
               <p className="text-gray-500">No orders yet</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {state.orders.map(order => (
+              {orders.map(order => (
                 <div key={order.id} className="bg-white rounded-2xl p-4 shadow-sm">
                   <div className="flex justify-between items-start mb-2">
                     <div>
@@ -281,7 +291,7 @@ export default function StaffView() {
 
           {/* Menu Items List */}
           <div className="space-y-2">
-            {state.menu.map(item => (
+            {menu.map(item => (
               <div key={item.id} className={`bg-white rounded-xl p-3 shadow-sm flex items-center gap-3 ${!item.available ? 'opacity-60' : ''}`}>
                 <div className="flex-1">
                   <h4 className="font-medium text-gray-800 text-sm">{item.name}</h4>

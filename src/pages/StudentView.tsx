@@ -1,22 +1,33 @@
 import { useState, useEffect } from 'react';
-import { MenuItem, CartItem, Order, AppState } from '../types';
-import { loadState, addOrder, updateWalletBalance, addWalletFunds, onStateChange } from '../store';
-import { ShoppingCart, Clock, CheckCircle, ChefHat, Wallet, Plus, Minus, Trash2, ArrowLeft, CreditCard, Banknote, RefreshCw } from 'lucide-react';
+import { MenuItem, CartItem, Wallet, Order } from '../types';
+import { subscribeToMenu, subscribeToOrders, subscribeToWallet, addOrder, updateWalletBalance, addWalletFunds, seedData } from '../store';
+import { ShoppingCart, Clock, CheckCircle, ChefHat, Wallet as WalletIcon, Plus, Minus, Trash2, ArrowLeft, CreditCard, Banknote } from 'lucide-react';
 
 type StudentPage = 'menu' | 'cart' | 'checkout' | 'orders' | 'wallet';
 
 export default function StudentView() {
   const [page, setPage] = useState<StudentPage>('menu');
-  const [state, setState] = useState<AppState>(loadState());
+  const [menu, setMenu] = useState<MenuItem[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [wallet, setWallet] = useState<Wallet>({ balance: 0, studentName: 'Ahmed Khan' });
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [orderSuccess, setOrderSuccess] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onStateChange((newState) => {
-      setState(newState);
+    // Seed data first, then subscribe
+    seedData().then(() => {
+      const unsubMenu = subscribeToMenu(setMenu);
+      const unsubOrders = subscribeToOrders(setOrders);
+      const unsubWallet = subscribeToWallet(setWallet);
+      setLoading(false);
+      return () => {
+        unsubMenu();
+        unsubOrders();
+        unsubWallet();
+      };
     });
-    return unsub;
   }, []);
 
   const addToCart = (item: MenuItem) => {
@@ -47,23 +58,23 @@ export default function StudentView() {
   const cartCount = cart.reduce((sum, c) => sum + c.quantity, 0);
 
   const filteredMenu = selectedCategory === 'all' 
-    ? state.menu 
-    : state.menu.filter(item => item.category === selectedCategory);
+    ? menu 
+    : menu.filter(item => item.category === selectedCategory);
 
-  const placeOrder = (paymentMethod: 'wallet' | 'cash') => {
+  const placeOrder = async (paymentMethod: 'wallet' | 'cash') => {
     if (paymentMethod === 'wallet') {
-      if (state.wallet.balance < cartTotal) {
+      if (wallet.balance < cartTotal) {
         alert('Insufficient wallet balance! Please top up.');
         return;
       }
-      updateWalletBalance(state.wallet.balance - cartTotal);
+      await updateWalletBalance(wallet.balance - cartTotal);
     }
 
     const maxPrepTime = Math.max(...cart.map(c => c.menuItem.prepTime));
     const estimatedPickup = new Date(Date.now() + maxPrepTime * 60000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
-    addOrder({
-      studentName: state.wallet.studentName,
+    await addOrder({
+      studentName: wallet.studentName,
       items: cart,
       total: cartTotal,
       paymentMethod,
@@ -72,13 +83,23 @@ export default function StudentView() {
     });
 
     setCart([]);
-    setState(loadState());
     setOrderSuccess(true);
     setTimeout(() => {
       setOrderSuccess(false);
       setPage('orders');
     }, 2000);
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <div className="animate-spin w-10 h-10 border-4 border-emerald-600 border-t-transparent rounded-full mx-auto mb-3"></div>
+          <p className="text-gray-500">Loading Campus Bites...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (orderSuccess) {
     return (
@@ -99,11 +120,11 @@ export default function StudentView() {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-xl font-bold">🍽️ Campus Bites</h1>
-            <p className="text-emerald-100 text-sm">Assalam o Alaikum, {state.wallet.studentName}</p>
+            <p className="text-emerald-100 text-sm">Assalam o Alaikum, {wallet.studentName}</p>
           </div>
           <div className="bg-white/20 backdrop-blur-sm rounded-xl px-3 py-2 flex items-center gap-1">
-            <Wallet className="w-4 h-4" />
-            <span className="font-semibold text-sm">Rs. {state.wallet.balance}</span>
+            <WalletIcon className="w-4 h-4" />
+            <span className="font-semibold text-sm">Rs. {wallet.balance}</span>
           </div>
         </div>
       </div>
@@ -242,7 +263,7 @@ export default function StudentView() {
               </div>
               <div className="text-left flex-1">
                 <h4 className="font-semibold text-gray-800">Pay with Wallet</h4>
-                <p className="text-sm text-gray-500">Balance: Rs. {state.wallet.balance}</p>
+                <p className="text-sm text-gray-500">Balance: Rs. {wallet.balance}</p>
               </div>
             </button>
 
@@ -266,19 +287,20 @@ export default function StudentView() {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-gray-800">My Orders</h2>
-            <button onClick={() => setState(loadState())} className="p-2 rounded-full hover:bg-gray-100">
-              <RefreshCw className="w-5 h-5 text-gray-500" />
-            </button>
+            <div className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
+              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+              Live
+            </div>
           </div>
           
-          {state.orders.length === 0 ? (
+          {orders.length === 0 ? (
             <div className="text-center py-12">
               <ChefHat className="w-16 h-16 text-gray-300 mx-auto mb-3" />
               <p className="text-gray-500">No orders yet</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {state.orders.map(order => (
+              {orders.map(order => (
                 <div key={order.id} className="bg-white rounded-2xl p-4 shadow-sm">
                   <div className="flex justify-between items-start mb-2">
                     <div>
@@ -323,8 +345,8 @@ export default function StudentView() {
           
           <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-6 text-white mb-6 shadow-lg">
             <p className="text-emerald-100 text-sm">Available Balance</p>
-            <p className="text-3xl font-bold mt-1">Rs. {state.wallet.balance}</p>
-            <p className="text-emerald-100 text-sm mt-3">{state.wallet.studentName}</p>
+            <p className="text-3xl font-bold mt-1">Rs. {wallet.balance}</p>
+            <p className="text-emerald-100 text-sm mt-3">{wallet.studentName}</p>
           </div>
 
           <div className="space-y-3">
@@ -332,7 +354,7 @@ export default function StudentView() {
             {[500, 1000, 2000, 5000].map(amount => (
               <button
                 key={amount}
-                onClick={() => { addWalletFunds(amount); setState(loadState()); }}
+                onClick={() => addWalletFunds(amount)}
                 className="w-full bg-white border-2 border-gray-200 rounded-xl p-4 flex justify-between items-center hover:border-emerald-400 hover:bg-emerald-50 transition-all"
               >
                 <span className="font-medium">Add Rs. {amount}</span>
@@ -347,7 +369,7 @@ export default function StudentView() {
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg">
         <div className="max-w-lg mx-auto flex justify-around py-2">
           <NavButton icon={<span className="text-xl">🍽️</span>} label="Menu" active={page === 'menu'} onClick={() => setPage('menu')} />
-          <NavButton icon={<span className="text-xl">📋</span>} label="Orders" active={page === 'orders'} onClick={() => setPage('orders')} badge={state.orders.filter(o => o.status !== 'picked_up').length || undefined} />
+          <NavButton icon={<span className="text-xl">📋</span>} label="Orders" active={page === 'orders'} onClick={() => setPage('orders')} badge={orders.filter(o => o.status !== 'picked_up').length || undefined} />
           <button onClick={() => setPage('cart')} className="relative flex flex-col items-center py-1 px-3">
             <div className="relative">
               <span className="text-xl">🛒</span>

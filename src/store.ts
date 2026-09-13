@@ -1,134 +1,165 @@
-import { MenuItem, Order, Wallet, AppState } from './types';
+import {
+  collection,
+  doc,
+  onSnapshot,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  getDoc,
+  getDocs,
+  query,
+  orderBy,
+  Unsubscribe,
+} from 'firebase/firestore';
+import { db } from './firebase';
+import { MenuItem, Order, Wallet, AppState, OrderStatus, CartItem } from './types';
 import { v4 as uuidv4 } from 'uuid';
 
-const STORAGE_KEY = 'cafeteria_app_data';
-
+// Default menu data
 const defaultMenu: MenuItem[] = [
-  { id: uuidv4(), name: 'Paratha Roll', description: 'Crispy paratha with chicken tikka & chutney', price: 180, category: 'breakfast', available: true, prepTime: 8 },
-  { id: uuidv4(), name: 'Chai', description: 'Traditional doodh patti chai', price: 60, category: 'beverages', available: true, prepTime: 3 },
-  { id: uuidv4(), name: 'Biryani Plate', description: 'Chicken biryani with raita & salad', price: 320, category: 'lunch', available: true, prepTime: 12 },
-  { id: uuidv4(), name: 'Chicken Karahi', description: 'Half portion with naan', price: 380, category: 'lunch', available: true, prepTime: 15 },
-  { id: uuidv4(), name: 'Samosa (2 pcs)', description: 'Crispy aloo samosas with chutney', price: 80, category: 'snacks', available: true, prepTime: 5 },
-  { id: uuidv4(), name: 'Fruit Chat', description: 'Seasonal fruits with chat masala', price: 150, category: 'snacks', available: true, prepTime: 5 },
-  { id: uuidv4(), name: 'Lassi', description: 'Sweet or salty lassi', price: 100, category: 'beverages', available: true, prepTime: 3 },
-  { id: uuidv4(), name: 'Egg Sandwich', description: 'Boiled egg sandwich with mayo', price: 120, category: 'breakfast', available: true, prepTime: 6 },
-  { id: uuidv4(), name: 'Dal Chawal', description: 'Masoor dal with steamed rice', price: 200, category: 'lunch', available: true, prepTime: 8 },
-  { id: uuidv4(), name: 'Cold Coffee', description: 'Iced coffee with cream', price: 180, category: 'beverages', available: true, prepTime: 4 },
-  { id: uuidv4(), name: 'Pakora Plate', description: 'Mixed veg pakoras with green chutney', price: 120, category: 'snacks', available: true, prepTime: 7 },
-  { id: uuidv4(), name: 'Halwa Puri', description: 'Traditional halwa puri set', price: 200, category: 'breakfast', available: true, prepTime: 10 },
+  { id: 'm1', name: 'Paratha Roll', description: 'Crispy paratha with chicken tikka & chutney', price: 180, category: 'breakfast', available: true, prepTime: 8 },
+  { id: 'm2', name: 'Chai', description: 'Traditional doodh patti chai', price: 60, category: 'beverages', available: true, prepTime: 3 },
+  { id: 'm3', name: 'Biryani Plate', description: 'Chicken biryani with raita & salad', price: 320, category: 'lunch', available: true, prepTime: 12 },
+  { id: 'm4', name: 'Chicken Karahi', description: 'Half portion with naan', price: 380, category: 'lunch', available: true, prepTime: 15 },
+  { id: 'm5', name: 'Samosa (2 pcs)', description: 'Crispy aloo samosas with chutney', price: 80, category: 'snacks', available: true, prepTime: 5 },
+  { id: 'm6', name: 'Fruit Chat', description: 'Seasonal fruits with chat masala', price: 150, category: 'snacks', available: true, prepTime: 5 },
+  { id: 'm7', name: 'Lassi', description: 'Sweet or salty lassi', price: 100, category: 'beverages', available: true, prepTime: 3 },
+  { id: 'm8', name: 'Egg Sandwich', description: 'Boiled egg sandwich with mayo', price: 120, category: 'breakfast', available: true, prepTime: 6 },
+  { id: 'm9', name: 'Dal Chawal', description: 'Masoor dal with steamed rice', price: 200, category: 'lunch', available: true, prepTime: 8 },
+  { id: 'm10', name: 'Cold Coffee', description: 'Iced coffee with cream', price: 180, category: 'beverages', available: true, prepTime: 4 },
+  { id: 'm11', name: 'Pakora Plate', description: 'Mixed veg pakoras with green chutney', price: 120, category: 'snacks', available: true, prepTime: 7 },
+  { id: 'm12', name: 'Halwa Puri', description: 'Traditional halwa puri set', price: 200, category: 'breakfast', available: true, prepTime: 10 },
 ];
 
-const defaultWallet: Wallet = {
-  balance: 2000,
-  studentName: 'Ahmed Khan'
-};
-
-function getDefaultState(): AppState {
-  return {
-    menu: defaultMenu,
-    orders: [],
-    wallet: defaultWallet,
-  };
-}
-
-export function loadState(): AppState {
+// Seed default data if collections are empty
+export async function seedData(): Promise<void> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      return JSON.parse(raw);
+    const menuSnap = await getDocs(collection(db, 'menu'));
+    if (menuSnap.empty) {
+      for (const item of defaultMenu) {
+        await setDoc(doc(db, 'menu', item.id), item);
+      }
     }
-  } catch (e) {
-    console.error('Failed to load state:', e);
+
+    const walletDoc = doc(db, 'wallet', 'student');
+    const walletSnap = await getDocs(collection(db, 'wallet'));
+    if (walletSnap.empty) {
+      await setDoc(walletDoc, { balance: 2000, studentName: 'Ahmed Khan' });
+    }
+  } catch (error) {
+    console.error('Error seeding data:', error);
   }
-  const defaultState = getDefaultState();
-  saveState(defaultState);
-  return defaultState;
 }
 
-export function saveState(state: AppState): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  // Dispatch custom event for cross-tab sync
-  window.dispatchEvent(new CustomEvent('cafeteria-state-update', { detail: state }));
+// Real-time subscription for menu
+export function subscribeToMenu(callback: (menu: MenuItem[]) => void): Unsubscribe {
+  return onSnapshot(
+    collection(db, 'menu'),
+    (snapshot) => {
+      const menu: MenuItem[] = snapshot.docs.map(doc => doc.data() as MenuItem);
+      callback(menu);
+    },
+    (error) => {
+      console.error('Menu subscription error:', error);
+    }
+  );
 }
 
-export function addOrder(order: Omit<Order, 'id' | 'createdAt'>): Order {
-  const state = loadState();
+// Real-time subscription for orders (newest first)
+export function subscribeToOrders(callback: (orders: Order[]) => void): Unsubscribe {
+  const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const orders: Order[] = snapshot.docs.map(doc => doc.data() as Order);
+      callback(orders);
+    },
+    (error) => {
+      console.error('Orders subscription error:', error);
+    }
+  );
+}
+
+// Real-time subscription for wallet
+export function subscribeToWallet(callback: (wallet: Wallet) => void): Unsubscribe {
+  return onSnapshot(
+    doc(db, 'wallet', 'student'),
+    (snapshot) => {
+      if (snapshot.exists()) {
+        callback(snapshot.data() as Wallet);
+      }
+    },
+    (error) => {
+      console.error('Wallet subscription error:', error);
+    }
+  );
+}
+
+// Add a new order
+export async function addOrder(order: Omit<Order, 'id' | 'createdAt'>): Promise<Order> {
   const newOrder: Order = {
     ...order,
     id: uuidv4(),
     createdAt: new Date().toISOString(),
   };
-  state.orders.unshift(newOrder);
-  saveState(state);
+  await setDoc(doc(db, 'orders', newOrder.id), newOrder);
   return newOrder;
 }
 
-export function updateOrderStatus(orderId: string, status: Order['status']): void {
-  const state = loadState();
-  const order = state.orders.find(o => o.id === orderId);
-  if (order) {
-    order.status = status;
-    saveState(state);
+// Update order status
+export async function updateOrderStatus(orderId: string, status: OrderStatus): Promise<void> {
+  await updateDoc(doc(db, 'orders', orderId), { status });
+}
+
+// Toggle menu item availability
+export async function toggleMenuItemAvailability(itemId: string): Promise<void> {
+  const itemRef = doc(db, 'menu', itemId);
+  const snap = await getDoc(itemRef);
+  if (snap.exists()) {
+    const current = snap.data() as MenuItem;
+    await updateDoc(itemRef, { available: !current.available });
   }
 }
 
-export function updateMenu(menu: MenuItem[]): void {
-  const state = loadState();
-  state.menu = menu;
-  saveState(state);
+// Add new menu item
+export async function addMenuItem(item: Omit<MenuItem, 'id'>): Promise<void> {
+  const id = uuidv4();
+  await setDoc(doc(db, 'menu', id), { ...item, id });
 }
 
-export function toggleMenuItemAvailability(itemId: string): void {
-  const state = loadState();
-  const item = state.menu.find(m => m.id === itemId);
-  if (item) {
-    item.available = !item.available;
-    saveState(state);
+// Delete menu item
+export async function deleteMenuItem(itemId: string): Promise<void> {
+  await deleteDoc(doc(db, 'menu', itemId));
+}
+
+// Update wallet balance
+export async function updateWalletBalance(newBalance: number): Promise<void> {
+  await updateDoc(doc(db, 'wallet', 'student'), { balance: newBalance });
+}
+
+// Add funds to wallet
+export async function addWalletFunds(amount: number): Promise<void> {
+  const snap = await getDoc(doc(db, 'wallet', 'student'));
+  if (snap.exists()) {
+    const current = snap.data() as Wallet;
+    await updateDoc(doc(db, 'wallet', 'student'), { balance: current.balance + amount });
   }
 }
 
-export function updateWalletBalance(newBalance: number): void {
-  const state = loadState();
-  state.wallet.balance = newBalance;
-  saveState(state);
-}
+// Reset all data
+export async function resetData(): Promise<void> {
+  // Clear orders
+  const ordersSnap = await getDocs(collection(db, 'orders'));
+  for (const d of ordersSnap.docs) {
+    await deleteDoc(d.ref);
+  }
 
-export function addWalletFunds(amount: number): void {
-  const state = loadState();
-  state.wallet.balance += amount;
-  saveState(state);
-}
+  // Reset menu
+  const menuSnap = await getDocs(collection(db, 'menu'));
+  for (const d of menuSnap.docs) {
+    await deleteDoc(d.ref);
+  }
 
-export function resetData(): void {
-  localStorage.removeItem(STORAGE_KEY);
-  const defaultState = getDefaultState();
-  saveState(defaultState);
-}
-
-// Listen for cross-tab updates (real-time simulation)
-export function onStateChange(callback: (state: AppState) => void): () => void {
-  const handler = (e: Event) => {
-    const customEvent = e as CustomEvent;
-    if (customEvent.detail) {
-      callback(customEvent.detail);
-    }
-  };
-  
-  const storageHandler = (e: StorageEvent) => {
-    if (e.key === STORAGE_KEY && e.newValue) {
-      try {
-        callback(JSON.parse(e.newValue));
-      } catch (err) {
-        console.error('Failed to parse storage event:', err);
-      }
-    }
-  };
-
-  window.addEventListener('cafeteria-state-update', handler);
-  window.addEventListener('storage', storageHandler);
-
-  return () => {
-    window.removeEventListener('cafeteria-state-update', handler);
-    window.removeEventListener('storage', storageHandler);
-  };
+  // Re-seed
+  await seedData();
 }

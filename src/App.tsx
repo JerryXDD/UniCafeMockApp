@@ -4,6 +4,13 @@ import StaffView from './pages/StaffView';
 import { resetData } from './store';
 import { UserRole } from './types';
 
+const handleReset = async () => {
+  if (confirm('Reset all data to defaults?')) {
+    await resetData();
+    window.location.reload();
+  }
+};
+
 export default function App() {
   const [role, setRole] = useState<UserRole>(null);
 
@@ -47,7 +54,7 @@ export default function App() {
         <div className="mt-8 text-center">
           <p className="text-xs text-gray-400 mb-2">💡 Demo Tip: Open in two tabs — one as Student, one as Staff — to see real-time sync!</p>
           <button
-            onClick={() => { if (confirm('Reset all data to defaults?')) { resetData(); window.location.reload(); } }}
+            onClick={handleReset}
             className="text-xs text-gray-400 hover:text-red-400 underline transition-colors"
           >
             Reset Demo Data
