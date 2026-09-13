@@ -18,15 +18,22 @@ export default function StaffView({ onSwitchRole }: StaffViewProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    seedMenu().then(() => {
-      const unsubMenu = subscribeToMenu(setMenu);
-      const unsubOrders = subscribeToAllOrders(setOrders);
+    let unsubMenu: (() => void) | undefined;
+    let unsubOrders: (() => void) | undefined;
+
+    const init = async () => {
+      await seedMenu();
+      unsubMenu = subscribeToMenu(setMenu);
+      unsubOrders = subscribeToAllOrders(setOrders);
       setLoading(false);
-      return () => {
-        unsubMenu();
-        unsubOrders();
-      };
-    });
+    };
+
+    init();
+
+    return () => {
+      unsubMenu?.();
+      unsubOrders?.();
+    };
   }, []);
 
   const pendingOrders = orders.filter(o => o.status === 'pending');

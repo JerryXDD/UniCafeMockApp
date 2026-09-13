@@ -8,8 +8,6 @@ import {
   getDoc,
   getDocs,
   query,
-  orderBy,
-  where,
   Unsubscribe,
 } from 'firebase/firestore';
 import { db } from './firebase';
@@ -60,18 +58,18 @@ export function subscribeToMenu(callback: (menu: MenuItem[]) => void): Unsubscri
   );
 }
 
-// Real-time subscription for a specific student's orders
+// Real-time subscription for a specific student's orders (no composite index needed)
 export function subscribeToStudentOrders(userId: string, callback: (orders: Order[]) => void): Unsubscribe {
-  const q = query(
-    collection(db, 'orders'),
-    where('userId', '==', userId),
-    orderBy('createdAt', 'desc')
-  );
+  // Get all orders and filter client-side to avoid composite index requirement
   return onSnapshot(
-    q,
+    collection(db, 'orders'),
     (snapshot) => {
-      const orders: Order[] = snapshot.docs.map(doc => doc.data() as Order);
-      callback(orders);
+      const allOrders: Order[] = snapshot.docs.map(doc => doc.data() as Order);
+      // Filter for this user's orders and sort by createdAt descending
+      const userOrders = allOrders
+        .filter(order => order.userId === userId)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      callback(userOrders);
     },
     (error) => {
       console.error('Orders subscription error:', error);
@@ -81,11 +79,12 @@ export function subscribeToStudentOrders(userId: string, callback: (orders: Orde
 
 // Real-time subscription for ALL orders (staff view)
 export function subscribeToAllOrders(callback: (orders: Order[]) => void): Unsubscribe {
-  const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
   return onSnapshot(
-    q,
+    collection(db, 'orders'),
     (snapshot) => {
-      const orders: Order[] = snapshot.docs.map(doc => doc.data() as Order);
+      const orders: Order[] = snapshot.docs
+        .map(doc => doc.data() as Order)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       callback(orders);
     },
     (error) => {
