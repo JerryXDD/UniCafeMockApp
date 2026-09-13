@@ -30,21 +30,26 @@ export default function StudentView({ onSwitchRole }: StudentViewProps) {
   useEffect(() => {
     if (!user) return;
 
+    let unsubMenu: (() => void) | undefined;
+    let unsubOrders: (() => void) | undefined;
+    let unsubWallet: (() => void) | undefined;
+
     const init = async () => {
       await seedMenu();
       requestNotificationPermission();
-      const unsubMenu = subscribeToMenu(setMenu);
-      const unsubOrders = subscribeToStudentOrders(user.uid, setOrders);
-      const unsubWallet = subscribeToWallet(user.uid, setWallet);
+      unsubMenu = subscribeToMenu(setMenu);
+      unsubOrders = subscribeToStudentOrders(user.uid, setOrders);
+      unsubWallet = subscribeToWallet(user.uid, setWallet);
       setLoading(false);
-      return () => {
-        unsubMenu();
-        unsubOrders();
-        unsubWallet();
-      };
     };
 
     init();
+
+    return () => {
+      unsubMenu?.();
+      unsubOrders?.();
+      unsubWallet?.();
+    };
   }, [user]);
 
   // Watch for order status changes and trigger notifications
