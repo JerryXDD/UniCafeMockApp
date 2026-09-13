@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { MenuItem, Order } from '../types';
-import { subscribeToMenu, subscribeToOrders, updateOrderStatus, toggleMenuItemAvailability, addMenuItem, deleteMenuItem, seedData } from '../store';
+import { subscribeToMenu, subscribeToAllOrders, updateOrderStatus, toggleMenuItemAvailability, addMenuItem, deleteMenuItem, seedMenu } from '../store';
 import { Clock, CheckCircle, ChefHat, Package, Plus, Trash2, ToggleLeft, ToggleRight, TrendingUp } from 'lucide-react';
 
 type StaffPage = 'dashboard' | 'orders' | 'menu';
@@ -14,9 +14,9 @@ export default function StaffView() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    seedData().then(() => {
+    seedMenu().then(() => {
       const unsubMenu = subscribeToMenu(setMenu);
-      const unsubOrders = subscribeToOrders(setOrders);
+      const unsubOrders = subscribeToAllOrders(setOrders);
       setLoading(false);
       return () => {
         unsubMenu();

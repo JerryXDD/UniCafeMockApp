@@ -1,34 +1,40 @@
 import { useState, useEffect } from 'react';
 import { MenuItem, CartItem, Wallet, Order } from '../types';
-import { subscribeToMenu, subscribeToOrders, subscribeToWallet, addOrder, updateWalletBalance, addWalletFunds, seedData } from '../store';
-import { ShoppingCart, Clock, CheckCircle, ChefHat, Wallet as WalletIcon, Plus, Minus, Trash2, ArrowLeft, CreditCard, Banknote } from 'lucide-react';
+import { subscribeToMenu, subscribeToStudentOrders, subscribeToWallet, addOrder, updateWalletBalance, addWalletFunds, seedMenu } from '../store';
+import { useAuth } from '../AuthContext';
+import { ShoppingCart, Clock, CheckCircle, ChefHat, Wallet as WalletIcon, Plus, Minus, Trash2, ArrowLeft, CreditCard, Banknote, LogOut } from 'lucide-react';
 
 type StudentPage = 'menu' | 'cart' | 'checkout' | 'orders' | 'wallet';
 
 export default function StudentView() {
+  const { user, logout } = useAuth();
   const [page, setPage] = useState<StudentPage>('menu');
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [wallet, setWallet] = useState<Wallet>({ balance: 0, studentName: 'Ahmed Khan' });
+  const [wallet, setWallet] = useState<Wallet>({ balance: 0, studentName: user?.displayName || 'Student' });
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Seed data first, then subscribe
-    seedData().then(() => {
+    if (!user) return;
+
+    const init = async () => {
+      await seedMenu();
       const unsubMenu = subscribeToMenu(setMenu);
-      const unsubOrders = subscribeToOrders(setOrders);
-      const unsubWallet = subscribeToWallet(setWallet);
+      const unsubOrders = subscribeToStudentOrders(user.uid, setOrders);
+      const unsubWallet = subscribeToWallet(user.uid, setWallet);
       setLoading(false);
       return () => {
         unsubMenu();
         unsubOrders();
         unsubWallet();
       };
-    });
-  }, []);
+    };
+
+    init();
+  }, [user]);
 
   const addToCart = (item: MenuItem) => {
     setCart(prev => {
@@ -62,19 +68,22 @@ export default function StudentView() {
     : menu.filter(item => item.category === selectedCategory);
 
   const placeOrder = async (paymentMethod: 'wallet' | 'cash') => {
+    if (!user) return;
+
     if (paymentMethod === 'wallet') {
       if (wallet.balance < cartTotal) {
         alert('Insufficient wallet balance! Please top up.');
         return;
       }
-      await updateWalletBalance(wallet.balance - cartTotal);
+      await updateWalletBalance(user.uid, wallet.balance - cartTotal);
     }
 
     const maxPrepTime = Math.max(...cart.map(c => c.menuItem.prepTime));
     const estimatedPickup = new Date(Date.now() + maxPrepTime * 60000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
     await addOrder({
-      studentName: wallet.studentName,
+      userId: user.uid,
+      studentName: user.displayName || 'Student',
       items: cart,
       total: cartTotal,
       paymentMethod,
@@ -120,11 +129,16 @@ export default function StudentView() {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-xl font-bold">🍽️ Campus Bites</h1>
-            <p className="text-emerald-100 text-sm">Assalam o Alaikum, {wallet.studentName}</p>
+            <p className="text-emerald-100 text-sm">Assalam o Alaikum, {user?.displayName || 'Student'}</p>
           </div>
-          <div className="bg-white/20 backdrop-blur-sm rounded-xl px-3 py-2 flex items-center gap-1">
-            <WalletIcon className="w-4 h-4" />
-            <span className="font-semibold text-sm">Rs. {wallet.balance}</span>
+          <div className="flex items-center gap-2">
+            <div className="bg-white/20 backdrop-blur-sm rounded-xl px-3 py-2 flex items-center gap-1">
+              <WalletIcon className="w-4 h-4" />
+              <span className="font-semibold text-sm">Rs. {wallet.balance}</span>
+            </div>
+            <button onClick={logout} className="p-2 bg-white/20 rounded-xl hover:bg-white/30" title="Logout">
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>
@@ -346,7 +360,7 @@ export default function StudentView() {
           <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-6 text-white mb-6 shadow-lg">
             <p className="text-emerald-100 text-sm">Available Balance</p>
             <p className="text-3xl font-bold mt-1">Rs. {wallet.balance}</p>
-            <p className="text-emerald-100 text-sm mt-3">{wallet.studentName}</p>
+            <p className="text-emerald-100 text-sm mt-3">{user?.displayName || 'Student'}</p>
           </div>
 
           <div className="space-y-3">
@@ -354,7 +368,7 @@ export default function StudentView() {
             {[500, 1000, 2000, 5000].map(amount => (
               <button
                 key={amount}
-                onClick={() => addWalletFunds(amount)}
+                onClick={() => user && addWalletFunds(user.uid, amount)}
                 className="w-full bg-white border-2 border-gray-200 rounded-xl p-4 flex justify-between items-center hover:border-emerald-400 hover:bg-emerald-50 transition-all"
               >
                 <span className="font-medium">Add Rs. {amount}</span>

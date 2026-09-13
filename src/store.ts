@@ -9,13 +9,14 @@ import {
   getDocs,
   query,
   orderBy,
+  where,
   Unsubscribe,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { MenuItem, Order, Wallet, AppState, OrderStatus, CartItem } from './types';
+import { MenuItem, Order, Wallet, OrderStatus } from './types';
 import { v4 as uuidv4 } from 'uuid';
 
-// Default menu data
+// Default menu data (shared across all students)
 const defaultMenu: MenuItem[] = [
   { id: 'm1', name: 'Paratha Roll', description: 'Crispy paratha with chicken tikka & chutney', price: 180, category: 'breakfast', available: true, prepTime: 8 },
   { id: 'm2', name: 'Chai', description: 'Traditional doodh patti chai', price: 60, category: 'beverages', available: true, prepTime: 3 },
@@ -31,8 +32,8 @@ const defaultMenu: MenuItem[] = [
   { id: 'm12', name: 'Halwa Puri', description: 'Traditional halwa puri set', price: 200, category: 'breakfast', available: true, prepTime: 10 },
 ];
 
-// Seed default data if collections are empty
-export async function seedData(): Promise<void> {
+// Seed default menu if empty
+export async function seedMenu(): Promise<void> {
   try {
     const menuSnap = await getDocs(collection(db, 'menu'));
     if (menuSnap.empty) {
@@ -40,18 +41,12 @@ export async function seedData(): Promise<void> {
         await setDoc(doc(db, 'menu', item.id), item);
       }
     }
-
-    const walletDoc = doc(db, 'wallet', 'student');
-    const walletSnap = await getDocs(collection(db, 'wallet'));
-    if (walletSnap.empty) {
-      await setDoc(walletDoc, { balance: 2000, studentName: 'Ahmed Khan' });
-    }
   } catch (error) {
-    console.error('Error seeding data:', error);
+    console.error('Error seeding menu:', error);
   }
 }
 
-// Real-time subscription for menu
+// Real-time subscription for menu (shared)
 export function subscribeToMenu(callback: (menu: MenuItem[]) => void): Unsubscribe {
   return onSnapshot(
     collection(db, 'menu'),
@@ -65,9 +60,13 @@ export function subscribeToMenu(callback: (menu: MenuItem[]) => void): Unsubscri
   );
 }
 
-// Real-time subscription for orders (newest first)
-export function subscribeToOrders(callback: (orders: Order[]) => void): Unsubscribe {
-  const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
+// Real-time subscription for a specific student's orders
+export function subscribeToStudentOrders(userId: string, callback: (orders: Order[]) => void): Unsubscribe {
+  const q = query(
+    collection(db, 'orders'),
+    where('userId', '==', userId),
+    orderBy('createdAt', 'desc')
+  );
   return onSnapshot(
     q,
     (snapshot) => {
@@ -80,10 +79,25 @@ export function subscribeToOrders(callback: (orders: Order[]) => void): Unsubscr
   );
 }
 
-// Real-time subscription for wallet
-export function subscribeToWallet(callback: (wallet: Wallet) => void): Unsubscribe {
+// Real-time subscription for ALL orders (staff view)
+export function subscribeToAllOrders(callback: (orders: Order[]) => void): Unsubscribe {
+  const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
   return onSnapshot(
-    doc(db, 'wallet', 'student'),
+    q,
+    (snapshot) => {
+      const orders: Order[] = snapshot.docs.map(doc => doc.data() as Order);
+      callback(orders);
+    },
+    (error) => {
+      console.error('All orders subscription error:', error);
+    }
+  );
+}
+
+// Real-time subscription for a specific student's wallet
+export function subscribeToWallet(userId: string, callback: (wallet: Wallet) => void): Unsubscribe {
+  return onSnapshot(
+    doc(db, 'wallets', userId),
     (snapshot) => {
       if (snapshot.exists()) {
         callback(snapshot.data() as Wallet);
@@ -95,7 +109,7 @@ export function subscribeToWallet(callback: (wallet: Wallet) => void): Unsubscri
   );
 }
 
-// Add a new order
+// Add a new order (with userId)
 export async function addOrder(order: Omit<Order, 'id' | 'createdAt'>): Promise<Order> {
   const newOrder: Order = {
     ...order,
@@ -133,20 +147,20 @@ export async function deleteMenuItem(itemId: string): Promise<void> {
 }
 
 // Update wallet balance
-export async function updateWalletBalance(newBalance: number): Promise<void> {
-  await updateDoc(doc(db, 'wallet', 'student'), { balance: newBalance });
+export async function updateWalletBalance(userId: string, newBalance: number): Promise<void> {
+  await updateDoc(doc(db, 'wallets', userId), { balance: newBalance });
 }
 
 // Add funds to wallet
-export async function addWalletFunds(amount: number): Promise<void> {
-  const snap = await getDoc(doc(db, 'wallet', 'student'));
+export async function addWalletFunds(userId: string, amount: number): Promise<void> {
+  const snap = await getDoc(doc(db, 'wallets', userId));
   if (snap.exists()) {
     const current = snap.data() as Wallet;
-    await updateDoc(doc(db, 'wallet', 'student'), { balance: current.balance + amount });
+    await updateDoc(doc(db, 'wallets', userId), { balance: current.balance + amount });
   }
 }
 
-// Reset all data
+// Reset all data (admin function)
 export async function resetData(): Promise<void> {
   // Clear orders
   const ordersSnap = await getDocs(collection(db, 'orders'));
@@ -154,12 +168,16 @@ export async function resetData(): Promise<void> {
     await deleteDoc(d.ref);
   }
 
-  // Reset menu
+  // Clear wallets
+  const walletsSnap = await getDocs(collection(db, 'wallets'));
+  for (const d of walletsSnap.docs) {
+    await deleteDoc(d.ref);
+  }
+
+  // Clear and re-seed menu
   const menuSnap = await getDocs(collection(db, 'menu'));
   for (const d of menuSnap.docs) {
     await deleteDoc(d.ref);
   }
-
-  // Re-seed
-  await seedData();
+  await seedMenu();
 }
