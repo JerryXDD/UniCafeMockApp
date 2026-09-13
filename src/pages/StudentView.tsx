@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { MenuItem, CartItem, Wallet, Order } from '../types';
 import { subscribeToMenu, subscribeToStudentOrders, subscribeToWallet, addOrder, updateWalletBalance, addWalletFunds, seedMenu } from '../store';
 import { useAuth } from '../AuthContext';
-import { ShoppingCart, Clock, CheckCircle, ChefHat, Wallet as WalletIcon, Plus, Minus, Trash2, ArrowLeft, CreditCard, Banknote, LogOut } from 'lucide-react';
+import { ShoppingCart, Clock, CheckCircle, ChefHat, Wallet as WalletIcon, Plus, Minus, Trash2, ArrowLeft, CreditCard, Banknote, LogOut, Bell, X } from 'lucide-react';
+import { requestNotificationPermission, sendBrowserNotification, getStatusChangeMessage } from '../notifications';
 
 type StudentPage = 'menu' | 'cart' | 'checkout' | 'orders' | 'wallet';
 
@@ -16,12 +17,18 @@ export default function StudentView() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
+  
+  // Notification states
+  const [notifications, setNotifications] = useState<Array<{id: string; title: string; body: string; emoji: string; timestamp: number}>>([]);
+  const [showNotificationPanel, setShowNotificationPanel] = useState(false);
+  const prevOrdersRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     if (!user) return;
 
     const init = async () => {
       await seedMenu();
+      requestNotificationPermission();
       const unsubMenu = subscribeToMenu(setMenu);
       const unsubOrders = subscribeToStudentOrders(user.uid, setOrders);
       const unsubWallet = subscribeToWallet(user.uid, setWallet);
@@ -35,6 +42,48 @@ export default function StudentView() {
 
     init();
   }, [user]);
+
+  // Watch for order status changes and trigger notifications
+  useEffect(() => {
+    if (orders.length === 0) return;
+
+    orders.forEach(order => {
+      const prevStatus = prevOrdersRef.current.get(order.id);
+      
+      if (prevStatus && prevStatus !== order.status) {
+        // Status changed! Trigger notification
+        const message = getStatusChangeMessage(prevStatus, order.status);
+        
+        if (message) {
+          // Add to in-app notifications
+          const newNotification = {
+            id: `${order.id}-${Date.now()}`,
+            title: message.title,
+            body: message.body,
+            emoji: message.emoji,
+            timestamp: Date.now(),
+          };
+          
+          setNotifications(prev => [newNotification, ...prev].slice(0, 10)); // Keep last 10
+          
+          // Send browser notification
+          sendBrowserNotification(message.title, message.body);
+          
+          // Show toast for 5 seconds
+          setTimeout(() => {
+            setNotifications(prev => prev.filter(n => n.id !== newNotification.id));
+          }, 5000);
+        }
+      }
+      
+      // Update the ref with current status
+      prevOrdersRef.current.set(order.id, order.status);
+    });
+  }, [orders]);
+
+  const dismissNotification = (id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
 
   const addToCart = (item: MenuItem) => {
     setCart(prev => {
@@ -124,6 +173,25 @@ export default function StudentView() {
 
   return (
     <div className="max-w-lg mx-auto pb-24">
+      {/* Toast Notifications */}
+      <div className="fixed top-4 left-4 right-4 z-50 space-y-2 pointer-events-none">
+        {notifications.map(notif => (
+          <div
+            key={notif.id}
+            className="bg-white border-l-4 border-emerald-500 shadow-2xl rounded-xl p-4 pointer-events-auto animate-slide-up flex items-start gap-3"
+          >
+            <span className="text-2xl">{notif.emoji}</span>
+            <div className="flex-1">
+              <h4 className="font-bold text-gray-800 text-sm">{notif.title}</h4>
+              <p className="text-xs text-gray-600 mt-0.5">{notif.body}</p>
+            </div>
+            <button onClick={() => dismissNotification(notif.id)} className="text-gray-400 hover:text-gray-600">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+
       {/* Header */}
       <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-5 rounded-b-3xl shadow-lg mb-4">
         <div className="flex justify-between items-center">
@@ -135,6 +203,56 @@ export default function StudentView() {
             <div className="bg-white/20 backdrop-blur-sm rounded-xl px-3 py-2 flex items-center gap-1">
               <WalletIcon className="w-4 h-4" />
               <span className="font-semibold text-sm">Rs. {wallet.balance}</span>
+            </div>
+            {/* Notification Bell */}
+            <div className="relative">
+              <button
+                onClick={() => setShowNotificationPanel(!showNotificationPanel)}
+                className="p-2 bg-white/20 rounded-xl hover:bg-white/30 relative"
+                title="Notifications"
+              >
+                <Bell className="w-4 h-4" />
+                {notifications.length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold animate-pulse">
+                    {notifications.length}
+                  </span>
+                )}
+              </button>
+              
+              {/* Notification Panel */}
+              {showNotificationPanel && (
+                <div className="absolute right-0 top-12 w-80 bg-white rounded-2xl shadow-2xl border z-50 overflow-hidden">
+                  <div className="bg-gray-50 px-4 py-3 border-b flex justify-between items-center">
+                    <h3 className="font-bold text-gray-800 text-sm">Notifications</h3>
+                    <button onClick={() => setShowNotificationPanel(false)} className="text-gray-400 hover:text-gray-600">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <div className="p-6 text-center text-gray-400 text-sm">
+                        No notifications yet
+                      </div>
+                    ) : (
+                      notifications.map(notif => (
+                        <div key={notif.id} className="px-4 py-3 border-b hover:bg-gray-50 flex items-start gap-3">
+                          <span className="text-xl">{notif.emoji}</span>
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-gray-800 text-sm">{notif.title}</h4>
+                            <p className="text-xs text-gray-500 mt-0.5">{notif.body}</p>
+                            <p className="text-xs text-gray-400 mt-1">
+                              {new Date(notif.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                          <button onClick={() => dismissNotification(notif.id)} className="text-gray-300 hover:text-gray-500">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
             <button onClick={logout} className="p-2 bg-white/20 rounded-xl hover:bg-white/30" title="Logout">
               <LogOut className="w-4 h-4" />
