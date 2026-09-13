@@ -18,6 +18,7 @@ export type OrderStatus = 'pending' | 'preparing' | 'ready' | 'picked_up';
 
 export interface Order {
   id: string;
+  userId: string;
   studentName: string;
   items: CartItem[];
   total: number;
