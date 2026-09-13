@@ -112,15 +112,7 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Switch Role Button */}
-      <button
-        onClick={() => setRole(null)}
-        className="fixed top-3 right-3 z-50 bg-white/80 backdrop-blur-sm border rounded-full px-3 py-1.5 text-xs text-gray-500 hover:text-gray-800 hover:bg-white shadow-sm transition-all"
-      >
-        Switch Role
-      </button>
-      
-      {role === 'student' && user ? <StudentView /> : <StaffView />}
+      {role === 'student' && user ? <StudentView onSwitchRole={() => setRole(null)} /> : <StaffView onSwitchRole={() => setRole(null)} />}
     </div>
   );
 }

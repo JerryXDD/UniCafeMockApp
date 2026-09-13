@@ -7,7 +7,11 @@ import { requestNotificationPermission, sendBrowserNotification, getStatusChange
 
 type StudentPage = 'menu' | 'cart' | 'checkout' | 'orders' | 'wallet';
 
-export default function StudentView() {
+interface StudentViewProps {
+  onSwitchRole: () => void;
+}
+
+export default function StudentView({ onSwitchRole }: StudentViewProps) {
   const { user, logout } = useAuth();
   const [page, setPage] = useState<StudentPage>('menu');
   const [menu, setMenu] = useState<MenuItem[]>([]);
@@ -254,6 +258,9 @@ export default function StudentView() {
                 </div>
               )}
             </div>
+            <button onClick={onSwitchRole} className="p-2 bg-white/20 rounded-xl hover:bg-white/30" title="Switch Role">
+              <span className="text-sm">🔄</span>
+            </button>
             <button onClick={logout} className="p-2 bg-white/20 rounded-xl hover:bg-white/30" title="Logout">
               <LogOut className="w-4 h-4" />
             </button>

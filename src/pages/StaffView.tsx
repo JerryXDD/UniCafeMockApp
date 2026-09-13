@@ -5,7 +5,11 @@ import { Clock, CheckCircle, ChefHat, Package, Plus, Trash2, ToggleLeft, ToggleR
 
 type StaffPage = 'dashboard' | 'orders' | 'menu';
 
-export default function StaffView() {
+interface StaffViewProps {
+  onSwitchRole: () => void;
+}
+
+export default function StaffView({ onSwitchRole }: StaffViewProps) {
   const [page, setPage] = useState<StaffPage>('dashboard');
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -76,9 +80,14 @@ export default function StaffView() {
             <h1 className="text-xl font-bold">👨‍🍳 Staff Dashboard</h1>
             <p className="text-purple-200 text-sm">Campus Cafeteria Management</p>
           </div>
-          <div className="flex items-center gap-1 text-xs text-green-300 bg-white/20 px-2 py-1 rounded-full">
-            <span className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></span>
-            Live
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 text-xs text-green-300 bg-white/20 px-2 py-1 rounded-full">
+              <span className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></span>
+              Live
+            </div>
+            <button onClick={onSwitchRole} className="p-2 bg-white/20 rounded-xl hover:bg-white/30" title="Switch Role">
+              <span className="text-sm">🔄</span>
+            </button>
           </div>
         </div>
       </div>
