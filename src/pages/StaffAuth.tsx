@@ -35,11 +35,7 @@ export default function StaffAuth({ onLogin, onBack }: StaffAuthProps) {
     }, 600);
   };
 
-  const fillDemoCredentials = () => {
-    setEmail(STAFF_CREDENTIALS.email);
-    setPassword(STAFF_CREDENTIALS.password);
-    setError('');
-  };
+
 
   return (
     <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-6">
@@ -96,15 +92,6 @@ export default function StaffAuth({ onLogin, onBack }: StaffAuthProps) {
             {loading ? 'Verifying...' : 'Login as Staff'}
           </button>
         </form>
-
-        <div className="mt-4 p-3 bg-gray-800/50 border border-gray-700 rounded-xl">
-          <button
-            onClick={fillDemoCredentials}
-            className="w-full text-xs text-purple-400 hover:text-purple-300 transition-colors"
-          >
-            🔑 Click to auto-fill demo credentials
-          </button>
-        </div>
 
         <button
           onClick={onBack}
