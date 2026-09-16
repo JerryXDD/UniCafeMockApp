@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { MenuItem, Order } from '../types';
 import { subscribeToMenu, subscribeToAllOrders, updateOrderStatus, toggleMenuItemAvailability, addMenuItem, deleteMenuItem, seedMenu } from '../store';
-import { Clock, CheckCircle, ChefHat, Package, Plus, Trash2, ToggleLeft, ToggleRight, TrendingUp } from 'lucide-react';
+import { Clock, CheckCircle, ChefHat, Package, Plus, Trash2, ToggleLeft, ToggleRight, TrendingUp, AlertCircle } from 'lucide-react';
+import { ORDER_STATUS_FILTERS } from '../constants';
 
 type StaffPage = 'dashboard' | 'orders' | 'menu';
 
@@ -16,6 +17,8 @@ export default function StaffView({ onSwitchRole }: StaffViewProps) {
   const [newItem, setNewItem] = useState({ name: '', description: '', price: '', category: 'snacks' as MenuItem['category'], prepTime: '5' });
   const [showAddForm, setShowAddForm] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [orderFilter, setOrderFilter] = useState<string>('all');
+  const [menuError, setMenuError] = useState('');
 
   useEffect(() => {
     let unsubMenu: (() => void) | undefined;
@@ -51,16 +54,22 @@ export default function StaffView({ onSwitchRole }: StaffViewProps) {
 
   const handleAddItem = async () => {
     if (!newItem.name || !newItem.price) return;
-    await addMenuItem({
-      name: newItem.name,
-      description: newItem.description,
-      price: parseInt(newItem.price),
-      category: newItem.category,
-      available: true,
-      prepTime: parseInt(newItem.prepTime) || 5,
-    });
-    setNewItem({ name: '', description: '', price: '', category: 'snacks', prepTime: '5' });
-    setShowAddForm(false);
+    setMenuError('');
+    try {
+      await addMenuItem({
+        name: newItem.name,
+        description: newItem.description,
+        price: parseInt(newItem.price),
+        category: newItem.category,
+        available: true,
+        prepTime: parseInt(newItem.prepTime) || 5,
+      });
+      setNewItem({ name: '', description: '', price: '', category: 'snacks', prepTime: '5' });
+      setShowAddForm(false);
+    } catch (error) {
+      console.error('Failed to add menu item:', error);
+      setMenuError('Failed to add item. Please try again.');
+    }
   };
 
   const handleRemoveItem = async (itemId: string) => {
@@ -199,42 +208,75 @@ export default function StaffView({ onSwitchRole }: StaffViewProps) {
       {page === 'orders' && (
         <div>
           <h2 className="text-xl font-bold text-gray-100 mb-4">All Orders</h2>
-          {orders.length === 0 ? (
-            <div className="text-center py-12">
-              <Package className="w-16 h-16 text-gray-700 mx-auto mb-3" />
-              <p className="text-gray-500">No orders yet</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {orders.map(order => (
-                <div key={order.id} className="bg-gray-900 rounded-2xl p-4 shadow-sm border border-gray-800">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <span className="font-medium text-gray-100">{order.studentName}</span>
-                      <span className={`ml-2 inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
-                        order.status === 'pending' ? 'bg-yellow-950 text-yellow-400 border border-yellow-800' :
-                        order.status === 'preparing' ? 'bg-blue-950 text-blue-400 border border-blue-800' :
-                        order.status === 'ready' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' :
-                        'bg-gray-800 text-gray-400 border border-gray-700'
-                      }`}>
-                        {order.status === 'picked_up' ? '✓ Picked Up' : order.status}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-emerald-400">Rs. {order.total}</p>
-                      <p className="text-xs text-gray-500">{order.paymentMethod}</p>
-                    </div>
-                  </div>
-                  <p className="text-sm text-gray-400 mb-2">
-                    {order.items.map(i => `${i.menuItem.name} x${i.quantity}`).join(', ')}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {new Date(order.createdAt).toLocaleString()} • Pickup: {order.estimatedPickup}
-                  </p>
+
+          {/* Status Filter */}
+          <div className="flex gap-2 overflow-x-auto pb-3 mb-4 scrollbar-hide">
+            {ORDER_STATUS_FILTERS.map(filter => (
+              <button
+                key={filter.id}
+                onClick={() => setOrderFilter(filter.id)}
+                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+                  orderFilter === filter.id
+                    ? 'bg-purple-600 text-white shadow-md'
+                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700 border border-gray-700'
+                }`}
+              >
+                {filter.label}
+                {filter.id !== 'all' && (
+                  <span className="ml-1 text-xs opacity-70">
+                    ({orders.filter(o => o.status === filter.id).length})
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {(() => {
+            const filteredOrders = orderFilter === 'all' 
+              ? orders 
+              : orders.filter(o => o.status === orderFilter);
+            
+            if (filteredOrders.length === 0) {
+              return (
+                <div className="text-center py-12">
+                  <Package className="w-16 h-16 text-gray-700 mx-auto mb-3" />
+                  <p className="text-gray-500">No orders found</p>
                 </div>
-              ))}
-            </div>
-          )}
+              );
+            }
+
+            return (
+              <div className="space-y-3">
+                {filteredOrders.map(order => (
+                  <div key={order.id} className="bg-gray-900 rounded-2xl p-4 shadow-sm border border-gray-800">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <span className="font-medium text-gray-100">{order.studentName}</span>
+                        <span className={`ml-2 inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
+                          order.status === 'pending' ? 'bg-yellow-950 text-yellow-400 border border-yellow-800' :
+                          order.status === 'preparing' ? 'bg-blue-950 text-blue-400 border border-blue-800' :
+                          order.status === 'ready' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' :
+                          'bg-gray-800 text-gray-400 border border-gray-700'
+                        }`}>
+                          {order.status === 'picked_up' ? '✓ Picked Up' : order.status}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-emerald-400">Rs. {order.total}</p>
+                        <p className="text-xs text-gray-500">{order.paymentMethod}</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-400 mb-2">
+                      {order.items.map(i => `${i.menuItem.name} x${i.quantity}`).join(', ')}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {new Date(order.createdAt).toLocaleString()} • Pickup: {order.estimatedPickup}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -254,6 +296,12 @@ export default function StaffView({ onSwitchRole }: StaffViewProps) {
           {showAddForm && (
             <div className="bg-gray-900 rounded-2xl p-4 shadow-sm mb-4 border border-purple-800">
               <h3 className="font-semibold text-gray-300 mb-3">New Menu Item</h3>
+              {menuError && (
+                <div className="bg-red-950 border border-red-900 text-red-400 text-sm rounded-xl px-4 py-3 flex items-center gap-2 mb-3">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  {menuError}
+                </div>
+              )}
               <div className="space-y-3">
                 <input
                   type="text"

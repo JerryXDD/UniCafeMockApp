@@ -1,12 +1,6 @@
 import { useState } from 'react';
 import { Lock, Mail, AlertCircle } from 'lucide-react';
-
-// Hardcoded staff credentials (demo only)
-const STAFF_CREDENTIALS = {
-  email: 'staff@campusbites.pk',
-  password: 'campus123',
-  name: 'Cafeteria Admin'
-};
+import { STAFF_CREDENTIALS } from '../constants';
 
 interface StaffAuthProps {
   onLogin: () => void;
