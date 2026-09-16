@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { MenuItem, CartItem, Wallet, Order } from '../types';
-import { subscribeToMenu, subscribeToStudentOrders, subscribeToWallet, addOrder, updateWalletBalance, addWalletFunds, seedMenu } from '../store';
+import { subscribeToMenu, subscribeToStudentOrders, subscribeToWallet, addOrder, updateWalletBalance, addWalletFunds, cancelOrder, seedMenu } from '../store';
 import { useAuth } from '../AuthContext';
-import { ShoppingCart, Clock, CheckCircle, ChefHat, Wallet as WalletIcon, Plus, Minus, Trash2, ArrowLeft, CreditCard, Banknote, LogOut, Bell, X } from 'lucide-react';
+import { ShoppingCart, Clock, CheckCircle, ChefHat, Wallet as WalletIcon, Plus, Minus, Trash2, ArrowLeft, CreditCard, Banknote, LogOut, Bell, X, AlertCircle, XCircle } from 'lucide-react';
 import { requestNotificationPermission, sendBrowserNotification, getStatusChangeMessage } from '../notifications';
+import { MENU_CATEGORIES, WALLET_TOPUP_AMOUNTS } from '../constants';
 
 type StudentPage = 'menu' | 'cart' | 'checkout' | 'orders' | 'wallet';
 
@@ -21,6 +22,7 @@ export default function StudentView({ onSwitchRole }: StudentViewProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [checkoutError, setCheckoutError] = useState('');
   
   // Notification states
   const [notifications, setNotifications] = useState<Array<{id: string; title: string; body: string; emoji: string; timestamp: number}>>([]);
@@ -115,36 +117,80 @@ export default function StudentView({ onSwitchRole }: StudentViewProps) {
     ? menu 
     : menu.filter(item => item.category === selectedCategory);
 
+  // Calculate queue-aware pickup time based on pending/preparing orders ahead
+  const calculateEstimatedPickup = (): string => {
+    const activeOrders = orders.filter(o => o.status === 'pending' || o.status === 'preparing');
+    
+    // Sum prep times of all orders currently in the queue
+    const queuePrepTime = activeOrders.reduce((total, order) => {
+      const orderMaxPrepTime = Math.max(...order.items.map(i => i.menuItem.prepTime));
+      return total + orderMaxPrepTime;
+    }, 0);
+    
+    // Add this order's prep time
+    const thisOrderPrepTime = Math.max(...cart.map(c => c.menuItem.prepTime));
+    const totalWaitMinutes = queuePrepTime + thisOrderPrepTime;
+    
+    const pickupTime = new Date(Date.now() + totalWaitMinutes * 60000);
+    return pickupTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  // Count orders ahead of this student in the queue
+  const ordersAhead = orders.filter(o => o.status === 'pending' || o.status === 'preparing').length;
+
   const placeOrder = async (paymentMethod: 'wallet' | 'cash') => {
     if (!user) return;
+    setCheckoutError('');
 
-    if (paymentMethod === 'wallet') {
-      if (wallet.balance < cartTotal) {
-        alert('Insufficient wallet balance! Please top up.');
-        return;
-      }
-      await updateWalletBalance(user.uid, wallet.balance - cartTotal);
+    // Validate wallet balance BEFORE creating order
+    if (paymentMethod === 'wallet' && wallet.balance < cartTotal) {
+      setCheckoutError('Insufficient wallet balance! Please top up first.');
+      return;
     }
 
-    const maxPrepTime = Math.max(...cart.map(c => c.menuItem.prepTime));
-    const estimatedPickup = new Date(Date.now() + maxPrepTime * 60000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    try {
+      // Calculate queue-aware pickup time
+      const estimatedPickup = calculateEstimatedPickup();
 
-    await addOrder({
-      userId: user.uid,
-      studentName: user.displayName || 'Student',
-      items: cart,
-      total: cartTotal,
-      paymentMethod,
-      status: 'pending',
-      estimatedPickup,
-    });
+      // STEP 1: Create the order FIRST
+      await addOrder({
+        userId: user.uid,
+        studentName: user.displayName || 'Student',
+        items: cart,
+        total: cartTotal,
+        paymentMethod,
+        status: 'pending',
+        estimatedPickup,
+      });
 
-    setCart([]);
-    setOrderSuccess(true);
-    setTimeout(() => {
-      setOrderSuccess(false);
-      setPage('orders');
-    }, 2000);
+      // STEP 2: THEN debit the wallet (only if order creation succeeded)
+      if (paymentMethod === 'wallet') {
+        await updateWalletBalance(user.uid, wallet.balance - cartTotal);
+      }
+
+      setCart([]);
+      setOrderSuccess(true);
+      setTimeout(() => {
+        setOrderSuccess(false);
+        setPage('orders');
+      }, 2000);
+    } catch (error) {
+      console.error('Order placement failed:', error);
+      setCheckoutError('Failed to place order. Please try again.');
+    }
+  };
+
+  const handleCancelOrder = async (order: Order) => {
+    if (!user) return;
+    if (order.status !== 'pending') return;
+    
+    if (!confirm('Are you sure you want to cancel this order?')) return;
+
+    try {
+      await cancelOrder(order.id, user.uid, order.paymentMethod, order.total);
+    } catch (error) {
+      console.error('Failed to cancel order:', error);
+    }
   };
 
   const dismissNotification = (id: string) => {
@@ -272,17 +318,17 @@ export default function StudentView({ onSwitchRole }: StudentViewProps) {
         <div>
           {/* Category Filter */}
           <div className="flex gap-2 overflow-x-auto pb-3 px-1 mb-4 scrollbar-hide">
-            {['all', 'breakfast', 'lunch', 'snacks', 'beverages'].map(cat => (
+            {MENU_CATEGORIES.map(cat => (
               <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
                 className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
-                  selectedCategory === cat
+                  selectedCategory === cat.id
                     ? 'bg-emerald-600 text-white shadow-md'
                     : 'bg-gray-800 text-gray-400 hover:bg-gray-700 border border-gray-700'
                 }`}
               >
-                {cat === 'all' ? '🍽️ All' : cat === 'breakfast' ? '🌅 Breakfast' : cat === 'lunch' ? '🍛 Lunch' : cat === 'snacks' ? '🍿 Snacks' : '🥤 Drinks'}
+                {cat.emoji} {cat.label}
               </button>
             ))}
           </div>
@@ -391,6 +437,13 @@ export default function StudentView({ onSwitchRole }: StudentViewProps) {
             </div>
           </div>
 
+          {checkoutError && (
+            <div className="bg-red-950 border border-red-900 text-red-400 text-sm rounded-xl px-4 py-3 flex items-center gap-2 mb-4">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              {checkoutError}
+            </div>
+          )}
+
           <div className="space-y-3">
             <button
               onClick={() => placeOrder('wallet')}
@@ -430,6 +483,19 @@ export default function StudentView({ onSwitchRole }: StudentViewProps) {
               Live
             </div>
           </div>
+
+          {/* Queue position indicator */}
+          {ordersAhead > 0 && (
+            <div className="bg-blue-950 border border-blue-800 rounded-xl p-3 mb-4 flex items-center gap-2">
+              <span className="text-lg">📊</span>
+              <div>
+                <p className="text-sm font-medium text-blue-300">
+                  {ordersAhead} order{ordersAhead !== 1 ? 's' : ''} ahead of you in the queue
+                </p>
+                <p className="text-xs text-blue-400/70">Kitchen is working through them — your pickup time updates live</p>
+              </div>
+            </div>
+          )}
           
           {orders.length === 0 ? (
             <div className="text-center py-12">
@@ -467,6 +533,15 @@ export default function StudentView({ onSwitchRole }: StudentViewProps) {
                     </span>
                     <span className="font-bold text-emerald-400">Rs. {order.total}</span>
                   </div>
+                  {order.status === 'pending' && (
+                    <button
+                      onClick={() => handleCancelOrder(order)}
+                      className="mt-3 w-full bg-red-950 border border-red-900 text-red-400 py-2 rounded-xl text-sm font-medium hover:bg-red-900 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      Cancel Order {order.paymentMethod === 'wallet' && '(full refund)'}
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -489,7 +564,7 @@ export default function StudentView({ onSwitchRole }: StudentViewProps) {
 
           <div className="space-y-3">
             <h3 className="font-semibold text-gray-300">Top Up Wallet</h3>
-            {[500, 1000, 2000, 5000].map(amount => (
+            {WALLET_TOPUP_AMOUNTS.map(amount => (
               <button
                 key={amount}
                 onClick={() => user && addWalletFunds(user.uid, amount)}

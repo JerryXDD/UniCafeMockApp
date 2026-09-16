@@ -124,6 +124,20 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus): P
   await updateDoc(doc(db, 'orders', orderId), { status });
 }
 
+// Cancel an order (only if pending) and refund wallet if paid by wallet
+export async function cancelOrder(orderId: string, userId: string, paymentMethod: 'wallet' | 'cash', total: number): Promise<void> {
+  // First, refund wallet if paid by wallet
+  if (paymentMethod === 'wallet') {
+    const walletSnap = await getDoc(doc(db, 'wallets', userId));
+    if (walletSnap.exists()) {
+      const current = walletSnap.data() as Wallet;
+      await updateDoc(doc(db, 'wallets', userId), { balance: current.balance + total });
+    }
+  }
+  // Then delete the order
+  await deleteDoc(doc(db, 'orders', orderId));
+}
+
 // Toggle menu item availability
 export async function toggleMenuItemAvailability(itemId: string): Promise<void> {
   const itemRef = doc(db, 'menu', itemId);
