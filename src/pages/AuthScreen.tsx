@@ -46,19 +46,19 @@ export default function AuthScreen() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-6">
+    <div className="min-h-screen bg-[#f8f9fb] flex flex-col items-center justify-center p-6">
       <div className="text-center mb-8">
         <div className="text-6xl mb-4">🍽️</div>
-        <h1 className="text-3xl font-bold text-gray-100 mb-2">Campus Bites</h1>
+        <h1 className="text-3xl font-bold text-gray-800 mb-2">Campus Bites</h1>
         <p className="text-gray-500">University Cafeteria Pre-Order</p>
       </div>
 
-      <div className="w-full max-w-sm bg-gray-900 border border-gray-800 rounded-3xl shadow-2xl p-6">
-        <div className="flex mb-6 bg-gray-800 rounded-xl p-1">
+      <div className="w-full max-w-sm bg-white border border-gray-200 rounded-3xl shadow-sm p-6">
+        <div className="flex mb-6 bg-gray-100 rounded-xl p-1">
           <button
             onClick={() => { setIsLogin(true); setError(''); }}
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
-              isLogin ? 'bg-gray-700 text-emerald-400 shadow-sm' : 'text-gray-500 hover:text-gray-300'
+              isLogin ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
             Login
@@ -66,7 +66,7 @@ export default function AuthScreen() {
           <button
             onClick={() => { setIsLogin(false); setError(''); }}
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
-              !isLogin ? 'bg-gray-700 text-emerald-400 shadow-sm' : 'text-gray-500 hover:text-gray-300'
+              !isLogin ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
             Sign Up
@@ -76,15 +76,15 @@ export default function AuthScreen() {
         <form onSubmit={handleSubmit} className="space-y-4">
           {!isLogin && (
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1">Full Name</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
                   value={name}
                   onChange={e => setName(e.target.value)}
                   placeholder="e.g., Ahmed Khan"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-10 pr-4 py-3 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-3 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                   required={!isLogin}
                 />
               </div>
@@ -92,30 +92,30 @@ export default function AuthScreen() {
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">Email</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="student@uni.edu.pk"
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-10 pr-4 py-3 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-3 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                 required
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">Password</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-10 pr-4 py-3 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-3 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                 required
                 minLength={6}
               />
@@ -123,7 +123,7 @@ export default function AuthScreen() {
           </div>
 
           {error && (
-            <div className="bg-red-950 border border-red-900 text-red-400 text-sm rounded-xl px-4 py-3 flex items-center gap-2">
+            <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3 flex items-center gap-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               {error}
             </div>
@@ -132,22 +132,22 @@ export default function AuthScreen() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-3 rounded-xl font-semibold hover:from-emerald-700 hover:to-teal-700 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-3 rounded-xl font-semibold hover:from-emerald-700 hover:to-teal-700 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Please wait...' : isLogin ? 'Login' : 'Create Account'}
           </button>
         </form>
 
         {isLogin && (
-          <div className="mt-4 p-3 bg-emerald-950/30 border border-emerald-900/50 rounded-xl">
-            <p className="text-xs text-emerald-400/80">
+          <div className="mt-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+            <p className="text-xs text-emerald-700">
               <strong>Demo:</strong> Don't have an account? Click "Sign Up" to create one. You'll get Rs. 2000 wallet balance to start!
             </p>
           </div>
         )}
       </div>
 
-      <p className="mt-6 text-xs text-gray-600 text-center max-w-sm">
+      <p className="mt-6 text-xs text-gray-400 text-center max-w-sm">
         Each student gets their own wallet, order history, and personalized experience.
       </p>
     </div>

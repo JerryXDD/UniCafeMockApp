@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
-/* Dark mode base */
+/* Light mode base - soft on eyes */
 html, body {
-  background-color: #030712;
-  color: #f3f4f6;
+  background-color: #f8f9fb;
+  color: #1f2937;
 }
 
 /* Hide scrollbar for category filter */
